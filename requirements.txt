@@ -5,3 +5,7 @@ torch
 setuptools
 torchvision
 natsort
+tensorboard
+scipy
+flatbuffers
+torchmetrics

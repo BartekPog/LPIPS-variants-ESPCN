@@ -24,7 +24,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import config
 import model
-from dataset import CUDAPrefetcher, TrainValidImageDataset, TestImageDataset
+from dataset import CUDAPrefetcher, TrainValidImageDataset, TestImageDataset, TestArtificialDataset
 from image_quality_assessment import PSNR, SSIM
 from utils import load_state_dict, make_directory, save_checkpoint, AverageMeter, ProgressMeter
 
@@ -135,7 +135,11 @@ def load_dataset() -> [CUDAPrefetcher, CUDAPrefetcher]:
                                             config.gt_image_size,
                                             config.upscale_factor,
                                             "Train")
-    test_datasets = TestImageDataset(config.test_gt_images_dir, config.test_lr_images_dir)
+    # test_datasets = TestImageDataset(config.test_gt_images_dir, config.test_lr_images_dir)
+    test_datasets = TestArtificialDataset(config.test_gt_images_dir,
+                                        config.gt_image_size,
+                                        config.upscale_factor,
+                                        "Valid")
 
     # Generator all dataloader
     train_dataloader = DataLoader(train_datasets,
@@ -176,14 +180,22 @@ def define_loss() -> nn.MSELoss:
     return criterion
 
 
-def define_optimizer(espcn_model) -> optim.SGD:
-    optimizer = optim.SGD(espcn_model.parameters(),
-                          lr=config.model_lr,
-                          momentum=config.model_momentum,
-                          weight_decay=config.model_weight_decay,
-                          nesterov=config.model_nesterov)
+# def define_optimizer(espcn_model) -> optim.SGD:
+#     optimizer = optim.SGD(espcn_model.parameters(),
+#                           lr=config.model_lr,
+#                           momentum=config.model_momentum,
+#                           weight_decay=config.model_weight_decay,
+#                           nesterov=config.model_nesterov)
+
+#     return optimizer
+
+def define_optimizer(espcn_model) -> optim.Adam:
+    optimizer = optim.Adam(espcn_model.parameters(),
+                           lr=config.model_lr,
+                           weight_decay=config.model_weight_decay)
 
     return optimizer
+
 
 
 def define_scheduler(optimizer) -> lr_scheduler.MultiStepLR:

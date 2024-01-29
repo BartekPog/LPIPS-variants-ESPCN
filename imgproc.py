@@ -186,8 +186,11 @@ def tensor_to_image(tensor: Tensor, range_norm: bool, half: bool) -> Any:
     return image
 
 
-def preprocess_one_image(image_path: str, device: torch.device) -> [Tensor, ndarray, ndarray]:
+def preprocess_one_image(image_path: str, device: torch.device, downscale_factor: int=None) -> [Tensor, ndarray, ndarray]:
     image = cv2.imread(image_path).astype(np.float32) / 255.0
+
+    if downscale_factor is not None:
+        image = image_resize(image, 1 / downscale_factor)
 
     # BGR to YCbCr
     ycbcr_image = bgr_to_ycbcr(image, only_use_y_channel=False)

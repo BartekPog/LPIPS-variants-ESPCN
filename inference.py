@@ -62,7 +62,9 @@ def main(args):
     # Start the verification mode of the model.
     sr_model.eval()
 
-    lr_y_tensor, lr_cb_image, lr_cr_image = imgproc.preprocess_one_image(args.inputs_path, device)
+    downscale_factor = None if not args.downscale_input else args.upscale_factor
+    lr_y_tensor, lr_cb_image, lr_cr_image = imgproc.preprocess_one_image(args.inputs_path, device, downscale_factor)
+
 
     bic_cb_image = cv2.resize(lr_cb_image,
                               (int(lr_cb_image.shape[1] * args.upscale_factor),
@@ -99,6 +101,10 @@ if __name__ == "__main__":
                         type=str,
                         default="./figure/comic.png",
                         help="Low-resolution image path.")
+    parser.add_argument("--downscale_input",
+                        type=bool,
+                        default=True,
+                        help="Should downscale input image.")
     parser.add_argument("--output_path",
                         type=str,
                         default="./figure/sr_comic.png",

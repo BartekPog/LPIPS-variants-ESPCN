@@ -12,6 +12,7 @@
 # limitations under the License.
 # ==============================================================================
 import random
+import datetime
 
 import numpy as np
 import torch
@@ -37,17 +38,26 @@ upscale_factor = 4
 # Current configuration parameter method
 mode = "train"
 # Experiment name, easy to save weights and log files
-exp_name = "ESPCN_x4-T91"
+
+random_string = "".join([str(random.randint(0, 9)) for _ in range(6)])
+date_string = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+loss_type = "mse"
+
+exp_name = f"{model_arch_name}-DIV2K-{loss_type}-{date_string}-{random_string}"
 
 if mode == "train":
     # Dataset address
-    train_gt_images_dir = f"./data/T91/ESPCN/train"
+    train_gt_images_dir = f"./data/DIV2K/original"
 
-    test_gt_images_dir = f"./data/Set5/GTmod12"
-    test_lr_images_dir = f"./data/Set5/LRbicx{upscale_factor}"
+    # test_gt_images_dir = f"./data/Set5/GTmod12"
+    # test_lr_images_dir = f"./data/Set5/LRbicx{upscale_factor}"
 
-    gt_image_size = int(17 * upscale_factor)
-    batch_size = 16
+    test_gt_images_dir = f"./data/DIV2K-test"
+    # test_lr_images_dir = f"./data/DIV2K-valid/LRx4m"
+
+    # gt_image_size = int(17 * upscale_factor)
+    gt_image_size = int(32 * upscale_factor)
+    batch_size = 256
     num_workers = 4
 
     # The address to load the pretrained model
@@ -57,19 +67,19 @@ if mode == "train":
     resume_model_weights_path = f""
 
     # Total num epochs
-    epochs = 3000
+    epochs = 100
 
     # loss function weights
     loss_weights = 1.0
 
     # Optimizer parameter
-    model_lr = 1e-2
-    model_momentum = 0.9
-    model_weight_decay = 1e-4
-    model_nesterov = False
+    model_lr = 1e-3
+    # model_momentum = 0.9
+    model_weight_decay = 1e-7
+    # model_nesterov = False
 
     # EMA parameter
-    model_ema_decay = 0.999
+    # model_ema_decay = 0.999
 
     # Dynamically adjust the learning rate policy
     lr_scheduler_milestones = [int(epochs * 0.1), int(epochs * 0.8)]
@@ -77,7 +87,7 @@ if mode == "train":
 
     # How many iterations to print the training result
     train_print_frequency = 100
-    test_print_frequency = 1
+    test_print_frequency = 10
 
 if mode == "test":
     # Test data address
@@ -85,4 +95,4 @@ if mode == "test":
     sr_dir = f"./results/test/{exp_name}"
     gt_dir = "./data/Set5/GTmod12"
 
-    model_weights_path = "./results/pretrained_models/ESPCN_x4-T91-64bf5ee4.pth.tar"
+    model_weights_path = "./results/pretrained_models/ESPCN_x4-DIV2K-64bf5ee4.pth.tar"

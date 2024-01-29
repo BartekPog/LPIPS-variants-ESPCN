@@ -24,7 +24,7 @@ from torch.utils.data import Dataset, DataLoader
 import imgproc
 
 __all__ = [
-    "TrainValidImageDataset", "TestImageDataset",
+    "TrainValidImageDataset", "TestImageDataset", "TestArtificialDataset"
     "PrefetchGenerator", "PrefetchDataLoader", "CPUPrefetcher", "CUDAPrefetcher",
 ]
 
@@ -81,6 +81,10 @@ class TrainValidImageDataset(Dataset):
 
     def __len__(self) -> int:
         return len(self.image_file_names)
+    
+
+class TestArtificialDataset(TrainValidImageDataset):
+    pass
 
 
 class TestImageDataset(Dataset):
