@@ -28,13 +28,61 @@ __all__ = [
     "PrefetchGenerator", "PrefetchDataLoader", "CPUPrefetcher", "CUDAPrefetcher",
 ]
 
+class TrainValidRGBImageDataset(Dataset):
+    def __init__(
+            self,
+            hr_image_dir: str,
+            hr_image_size: int,
+            upscale_factor: int,
+            mode: str, # "Train" or "Valid"
+            only_use_y_channel: bool = True,
+    ) -> None:
+        super().__init__()
+        self.image_file_names = [os.path.join(hr_image_dir, image_file_name) for image_file_name in
+                                 os.listdir(hr_image_dir)]
+        self.hr_image_size = hr_image_size
+        self.upscale_factor = upscale_factor
+        self.mode = mode
+
+    def __getitem__(self, batch_index: int) -> [dict[str, Tensor], dict[str, Tensor]]:
+        # Read a batch of image data
+        hr_image = cv2.imread(self.image_file_names[batch_index]).astype(np.float32) / 255.
+
+        # Image processing operations
+        if self.mode == "Train":
+            hr_crop_image = imgproc.random_crop(hr_image, self.hr_image_size)
+        elif self.mode == "Valid":
+            hr_crop_image = imgproc.center_crop(hr_image, self.hr_image_size)
+        else:
+            raise ValueError("Unsupported data processing model, please use `Train` or `Valid`.")
+
+        # Convert BGR to RGB
+        hr_crop_image = cv2.cvtColor(hr_crop_image, cv2.COLOR_BGR2RGB)
+        
+        # Note: The range of input and output is between [0, 1]
+        hr_crop_tensor = imgproc.image_to_tensor(hr_crop_image, False, False)
+        lr_crop_tensor = torch.nn.functional.interpolate(hr_crop_tensor.unsqueeze(0), scale_factor=1 / self.upscale_factor, mode="area")
+        lr_crop_tensor = lr_crop_tensor.squeeze(0)
+
+        assert hr_crop_tensor.shape[0] == 3, "The number of channels in the input image is not 3."
+        assert lr_crop_tensor.shape[0] == 3, "The number of channels in the input image is not 3."
+        assert hr_crop_tensor.shape[1] == self.hr_image_size, "The height of the input image is not equal to the specified height."
+        assert hr_crop_tensor.shape[2] == self.hr_image_size, "The width of the input image is not equal to the specified width."
+
+        assert lr_crop_tensor.shape[1] == self.hr_image_size // self.upscale_factor, "The height of the input image is not equal to the specified height."
+        assert lr_crop_tensor.shape[2] == self.hr_image_size // self.upscale_factor, "The width of the input image is not equal to the specified width."
+
+        return lr_crop_tensor, hr_crop_tensor
+
+    def __len__(self) -> int:
+        return len(self.image_file_names)
 
 class TrainValidImageDataset(Dataset):
     """Define training/valid dataset loading methods.
 
     Args:
-        gt_image_dir (str): Train/Valid ground-truth dataset address.
-        gt_image_size (int): Ground-truth resolution image size.
+        hr_image_dir (str): Train/Valid ground-truth dataset address.
+        hr_image_size (int): Ground-truth resolution image size.
         upscale_factor (int): Image up scale factor.
         mode (str): Data set loading method, the training data set is for data enhancement, and the
             verification dataset is not for data enhancement.
@@ -42,83 +90,83 @@ class TrainValidImageDataset(Dataset):
 
     def __init__(
             self,
-            gt_image_dir: str,
-            gt_image_size: int,
+            hr_image_dir: str,
+            hr_image_size: int,
             upscale_factor: int,
             mode: str,
+            only_use_y_channel: bool = True,
     ) -> None:
-        super(TrainValidImageDataset, self).__init__()
-        self.image_file_names = [os.path.join(gt_image_dir, image_file_name) for image_file_name in
-                                 os.listdir(gt_image_dir)]
-        self.gt_image_size = gt_image_size
+        super().__init__()
+        self.image_file_names = [os.path.join(hr_image_dir, image_file_name) for image_file_name in
+                                 os.listdir(hr_image_dir)]
+        self.hr_image_size = hr_image_size
         self.upscale_factor = upscale_factor
         self.mode = mode
+        self.only_use_y_channel = only_use_y_channel
 
     def __getitem__(self, batch_index: int) -> [dict[str, Tensor], dict[str, Tensor]]:
         # Read a batch of image data
-        gt_crop_image = cv2.imread(self.image_file_names[batch_index]).astype(np.float32) / 255.
+        hr_crop_image = cv2.imread(self.image_file_names[batch_index]).astype(np.float32) / 255.
 
         # Image processing operations
         if self.mode == "Train":
-            gt_crop_image = imgproc.random_crop(gt_crop_image, self.gt_image_size)
+            hr_crop_image = imgproc.random_crop(hr_crop_image, self.hr_image_size)
         elif self.mode == "Valid":
-            gt_crop_image = imgproc.center_crop(gt_crop_image, self.gt_image_size)
+            hr_crop_image = imgproc.center_crop(hr_crop_image, self.hr_image_size)
         else:
             raise ValueError("Unsupported data processing model, please use `Train` or `Valid`.")
 
-        lr_crop_image = imgproc.image_resize(gt_crop_image, 1 / self.upscale_factor)
+        lr_crop_image = imgproc.image_resize(hr_crop_image, 1 / self.upscale_factor)
 
         # BGR convert Y channel
-        gt_crop_y_image = imgproc.bgr_to_ycbcr(gt_crop_image, only_use_y_channel=True)
-        lr_crop_y_image = imgproc.bgr_to_ycbcr(lr_crop_image, only_use_y_channel=True)
+        hr_crop_ycbcr = imgproc.bgr_to_ycbcr(hr_crop_image, only_use_y_channel=self.only_use_y_channel)
+        lr_crop_ycbcr = imgproc.bgr_to_ycbcr(lr_crop_image, only_use_y_channel=self.only_use_y_channel)
 
         # Convert image data into Tensor stream format (PyTorch).
         # Note: The range of input and output is between [0, 1]
-        gt_crop_y_tensor = imgproc.image_to_tensor(gt_crop_y_image, False, False)
-        lr_crop_y_tensor = imgproc.image_to_tensor(lr_crop_y_image, False, False)
+        hr_crop_tensor = imgproc.image_to_tensor(hr_crop_ycbcr, False, False)
+        lr_crop_tensor = imgproc.image_to_tensor(lr_crop_ycbcr, False, False)
 
-        return {"gt": gt_crop_y_tensor, "lr": lr_crop_y_tensor}
+  
+
+        return lr_crop_tensor, hr_crop_tensor
 
     def __len__(self) -> int:
         return len(self.image_file_names)
-    
-
-class TestArtificialDataset(TrainValidImageDataset):
-    pass
 
 
 class TestImageDataset(Dataset):
     """Define Test dataset loading methods.
 
     Args:
-        test_gt_images_dir (str): ground truth image in test image
+        test_hr_images_dir (str): ground truth image in test image
         test_lr_images_dir (str): low-resolution image in test image
     """
 
-    def __init__(self, test_gt_images_dir: str, test_lr_images_dir: str) -> None:
+    def __init__(self, test_hr_images_dir: str, test_lr_images_dir: str) -> None:
         super(TestImageDataset, self).__init__()
         # Get all image file names in folder
-        self.gt_image_file_names = [os.path.join(test_gt_images_dir, x) for x in os.listdir(test_gt_images_dir)]
+        self.hr_image_file_names = [os.path.join(test_hr_images_dir, x) for x in os.listdir(test_hr_images_dir)]
         self.lr_image_file_names = [os.path.join(test_lr_images_dir, x) for x in os.listdir(test_lr_images_dir)]
 
     def __getitem__(self, batch_index: int) -> [torch.Tensor, torch.Tensor]:
         # Read a batch of image data
-        gt_image = cv2.imread(self.gt_image_file_names[batch_index]).astype(np.float32) / 255.
+        hr_image = cv2.imread(self.hr_image_file_names[batch_index]).astype(np.float32) / 255.
         lr_image = cv2.imread(self.lr_image_file_names[batch_index]).astype(np.float32) / 255.
 
         # BGR convert Y channel
-        gt_y_image = imgproc.bgr_to_ycbcr(gt_image, only_use_y_channel=True)
+        hr_y_image = imgproc.bgr_to_ycbcr(hr_image, only_use_y_channel=True)
         lr_y_image = imgproc.bgr_to_ycbcr(lr_image, only_use_y_channel=True)
 
         # Convert image data into Tensor stream format (PyTorch).
         # Note: The range of input and output is between [0, 1]
-        gt_y_tensor = imgproc.image_to_tensor(gt_y_image, False, False)
+        hr_y_tensor = imgproc.image_to_tensor(hr_y_image, False, False)
         lr_y_tensor = imgproc.image_to_tensor(lr_y_image, False, False)
 
-        return {"gt": gt_y_tensor, "lr": lr_y_tensor}
+        return {"hr": hr_y_tensor, "lr": lr_y_tensor}
 
     def __len__(self) -> int:
-        return len(self.gt_image_file_names)
+        return len(self.hr_image_file_names)
 
 
 class PrefetchGenerator(threading.Thread):

@@ -391,6 +391,30 @@ def ycbcr_to_rgb(image: np.ndarray) -> np.ndarray:
 
     return image
 
+def ycbcr_to_rgb_torch(image: torch.tensor) -> torch.tensor:
+    """Implementation of ycbcr2rgb function in Matlab under Python language.
+
+    Args:
+        image (torch.Tensor): Image input in YCbCr format.
+
+    Returns:
+        image (torch.Tensor): RGB image array data
+
+    """
+    image_dtype = image.dtype
+    image *= 255.
+
+    weights = torch.tensor([[0.00456621, 0.00456621, 0.00456621],
+                              [0, -0.00153632, 0.00791071],
+                              [0.00625893, -0.00318811, 0]], device=image.device)
+
+    image = torch.matmul(image, weights) * 255.0 + [-222.921, 135.576, -276.836]
+
+    image /= 255.
+    image = image.astype(image_dtype)
+
+    return image
+
 
 def ycbcr_to_bgr(image: np.ndarray) -> np.ndarray:
     """Implementation of ycbcr2bgr function in Matlab under Python language.

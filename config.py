@@ -18,6 +18,8 @@ import numpy as np
 import torch
 from torch.backends import cudnn
 
+from loss import VisualLoss
+
 # Random seed to maintain reproducible results
 random.seed(0)
 torch.manual_seed(0)
@@ -36,14 +38,37 @@ out_channels = 1
 channels = 64
 upscale_factor = 4
 # Current configuration parameter method
-mode = "train"
-# Experiment name, easy to save weights and log files
+mode = "test"
 
-random_string = "".join([str(random.randint(0, 9)) for _ in range(6)])
-date_string = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-loss_type = "mse"
+date_string = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")
 
-exp_name = f"{model_arch_name}-DIV2K-{loss_type}-{date_string}-{random_string}"
+
+
+# loss = VisualLoss(
+#     lpips_weight=1,
+#     mse_weight=0,
+#     l1_weight=0,
+#     net_type="alex",
+#     max_pre_loss_shift=8,
+# )
+# loss = VisualLoss(
+#     lpips_weight=0.5,
+#     mse_weight=1,
+#     l1_weight=0,
+#     net_type="vgg",
+#     max_pre_loss_shift=0,
+# )
+
+loss = VisualLoss(
+    lpips_weight=1,
+    mse_weight=0,
+    l1_weight=0,
+    net_type="vgg",
+    max_pre_loss_shift=0,
+)
+
+# exp_name = f"{model_arch_name}-DIV2K-{loss.description}-{date_string}"
+exp_name = "espcn_x4-DIV2K-slpips_8_alex-2024-01-30-13-50" # Override for continue training or testing
 
 if mode == "train":
     # Dataset address
@@ -52,22 +77,22 @@ if mode == "train":
     # test_gt_images_dir = f"./data/Set5/GTmod12"
     # test_lr_images_dir = f"./data/Set5/LRbicx{upscale_factor}"
 
-    test_gt_images_dir = f"./data/DIV2K-test"
+    test_gt_images_dir = f"./data/DIV2K-val"
     # test_lr_images_dir = f"./data/DIV2K-valid/LRx4m"
 
     # gt_image_size = int(17 * upscale_factor)
     gt_image_size = int(32 * upscale_factor)
-    batch_size = 256
+    batch_size = 64
     num_workers = 4
 
-    # The address to load the pretrained model
-    pretrained_model_weights_path = f""
+    # The address to load the pretrained model ## samples/espcn_x4-DIV2K-lpips_vgg+mse-2024-01-29-23-54/g_epoch_154.pth.tar
+    pretrained_model_weights_path = "" #"results/espcn_x4-DIV2K-slpips_8_alex-2024-01-30-13-50/g_best.pth.tar" #"results/espcn_x4-DIV2K-lpips_alex-2024-01-30-10-48/g_best.pth.tar" #"samples/espcn_x4-DIV2K-lpips_vgg+mse-2024-01-29-23-54/g_epoch_154.pth.tar"
 
     # Incremental training and migration training
-    resume_model_weights_path = f""
+    resume_model_weights_path     = "" #"results/espcn_x4-DIV2K-slpips_8_alex-2024-01-30-13-50/g_best.pth.tar" #"results/espcn_x4-DIV2K-lpips_alex-2024-01-30-10-48/g_best.pth.tar" #"samples/espcn_x4-DIV2K-lpips_vgg+mse-2024-01-29-23-54/g_epoch_154.pth.tar"
 
     # Total num epochs
-    epochs = 100
+    epochs = 200
 
     # loss function weights
     loss_weights = 1.0
@@ -91,8 +116,11 @@ if mode == "train":
 
 if mode == "test":
     # Test data address
-    lr_dir = f"./data/Set5/LRbicx{upscale_factor}"
-    sr_dir = f"./results/test/{exp_name}"
-    gt_dir = "./data/Set5/GTmod12"
+    # lr_dir = f"./data/Set5/LRbicx{upscale_factor}"
+    lr_downscale = True
 
-    model_weights_path = "./results/pretrained_models/ESPCN_x4-DIV2K-64bf5ee4.pth.tar"
+    sr_dir = f"./results/test/{exp_name}"
+    gt_dir = f"./data/DIV2K-test/original"
+    # gt_dir = "./data/Set5/GTmod12"
+
+    model_weights_path = f"./results/{exp_name}/g_best.pth.tar"

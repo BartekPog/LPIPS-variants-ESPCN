@@ -1,3 +1,4 @@
+from collections import deque
 
 import numpy as np
 import torch 
@@ -69,7 +70,7 @@ class ShiftLPIPS(LearnedPerceptualImagePatchSimilarity): # lpips.LPIPS
 
 class VisualLoss(torch.nn.Module):
     '''Wrapper for LPIPS, MSE and L1 losses. Accepts unscaled images.'''
-    def __init__(self, lpips_weight=0, mse_weight=0, l1_weight=0, device='cuda', **kwargs):
+    def __init__(self, lpips_weight=0, mse_weight=0, l1_weight=0, device='cuda', past_inferences_avg_num=50, **kwargs):
         super().__init__()
 
         raw_weights = {
@@ -78,8 +79,6 @@ class VisualLoss(torch.nn.Module):
             'l1_weight': l1_weight,
         }
         
-        assert any(torch.stack(list(self.metric_weights.values())) > 0), 'At least one loss must be weighted > 0'
-        assert all(torch.stack(list(self.metric_weights.values())) >= 0), 'All loss weights must be >= 0'
 
         # filter out zero weights
         filtered_weights = {
@@ -88,32 +87,44 @@ class VisualLoss(torch.nn.Module):
             in raw_weights.items() if v > 0
         }
 
-        self.metric_weights = {}
-        self.metrics = torch.nn.ModuleDict({})
+        self.loss_weights = {}
+        self.losses = torch.nn.ModuleDict({})
 
         for k, v in filtered_weights.items(): # add metrics and weights, we want to avoid initializing a metric if it's zero-weighted
             if k == 'lpips_weight':
                 lpips = ShiftLPIPS(**kwargs)
-                self.metrics[lpips.metric_name] = lpips
-                self.metric_weights[lpips.metric_name] = torch.tensor(v, device=device)
+                self.losses[lpips.metric_name] = lpips
+                self.loss_weights[lpips.metric_name] = torch.tensor(v, device=device)
             
             elif k == 'mse_weight':
-                self.metrics['mse'] = torch.nn.MSELoss()
-                self.metric_weights['mse'] = torch.tensor(v, device=device)
+                self.losses['mse'] = torch.nn.MSELoss()
+                self.loss_weights['mse'] = torch.tensor(v, device=device)
             
             elif k == 'l1_weight':
-                self.metrics['l1'] = torch.nn.L1Loss()
-                self.metric_weights['l1'] = torch.tensor(v, device=device)
+                self.losses['l1'] = torch.nn.L1Loss()
+                self.loss_weights['l1'] = torch.tensor(v, device=device)
+
+        assert any(torch.stack(list(self.loss_weights.values())) > 0), 'At least one loss must be weighted > 0'
+        assert all(torch.stack(list(self.loss_weights.values())) >= 0), 'All loss weights must be >= 0'
 
         self.device = device
-        for metric in self.metrics.values():
-            metric.to(self.device)
+        for loss in self.losses.values():
+            loss.to(self.device)
+
+    def _get_loss_normalizer_factor(self, loss_name):
+        if loss_name not in self.loss_raw_values:
+            raise ValueError(f"Metric {loss_name} not found in loss_raw_values")
+
+        return torch.tensor(1, device=self.device) # with empty deque, we assume it has values around 1 
+
 
     def forward(self, x, y):
         total_loss = 0
-        for metric_name, metric in self.metrics.items():
-            loss = metric(x, y)
-            total_loss += loss * self.metric_weights[metric_name]
+        for loss_name, loss_func in self.losses.items():
+            loss_value = loss_func(x, y)
+
+            weighted_loss = self.loss_weights[loss_name] * loss_value
+            total_loss += weighted_loss
 
         return total_loss
     
@@ -121,7 +132,7 @@ class VisualLoss(torch.nn.Module):
     def description(self):
         desc_parts = [
             metric_name 
-            for metric_name, weight in self.metric_weights.items()
+            for metric_name, weight in self.loss_weights.items()
             if weight > 0
         ]
 

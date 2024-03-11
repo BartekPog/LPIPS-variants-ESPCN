@@ -416,6 +416,9 @@ class PSNR(nn.Module):
         psnr_metrics = _psnr_torch(raw_tensor, dst_tensor, self.crop_border, self.only_test_y_channel)
 
         return psnr_metrics
+    
+    def __str__(self):
+        return "PSNR"
 
 
 def _ssim_torch(raw_tensor: torch.Tensor,
@@ -539,6 +542,9 @@ class SSIM(nn.Module):
                                           self.gaussian_kernel_window)
 
         return ssim_metrics
+    
+    def __str__(self):
+        return "SSIM"
 
 
 def _fspecial_gaussian_torch(window_size: int, sigma: float, channels: int):
@@ -1371,3 +1377,9 @@ class NIQE(nn.Module):
                                    self.block_size_width)
 
         return niqe_metrics
+    
+    def __str__(self):
+        return f"{self.__class__.__name__}(crop_border={self.crop_border}, " \
+               f"niqe_model_path={self.niqe_model_path}, " \
+               f"block_size_height={self.block_size_height}, " \
+               f"block_size_width={self.block_size_width})"

@@ -13,10 +13,13 @@
 # ==============================================================================
 import os
 
+
+
 import cv2
 import numpy as np
 import torch
 from natsort import natsorted
+from tqdm import tqdm
 
 import imgproc
 import model
@@ -62,18 +65,23 @@ def main() -> None:
     ssim_metrics = 0.0
 
     # Get a list of test image file names.
-    file_names = natsorted(os.listdir(config.lr_dir))
+    file_names = natsorted(os.listdir(config.gt_dir))
     # Get the number of test image files.
     total_files = len(file_names)
 
-    for index in range(total_files):
-        lr_image_path = os.path.join(config.lr_dir, file_names[index])
+    for index in (pbar := tqdm(range(total_files), total=total_files)):
+        # lr_image_path = os.path.join(config.lr_dir, file_names[index])
+
+
         sr_image_path = os.path.join(config.sr_dir, file_names[index])
         gt_image_path = os.path.join(config.gt_dir, file_names[index])
 
-        print(f"Processing `{os.path.abspath(lr_image_path)}`...")
+        # print(f"Processing `{os.path.abspath(gt_image_path)}`...")
+        
         gt_y_tensor, gt_cb_image, gt_cr_image = imgproc.preprocess_one_image(gt_image_path, config.device)
-        lr_y_tensor, lr_cb_image, lr_cr_image = imgproc.preprocess_one_image(lr_image_path, config.device)
+
+        lr_y_tensor = imgproc.image_resize(gt_y_tensor[0].cpu(), 1 / config.upscale_factor).to(config.device).unsqueeze(0)
+
 
         # Only reconstruct the Y channel image data.
         with torch.no_grad():
@@ -89,6 +97,8 @@ def main() -> None:
         # Cal IQA metrics
         psnr_metrics += psnr(sr_y_tensor, gt_y_tensor).item()
         ssim_metrics += ssim(sr_y_tensor, gt_y_tensor).item()
+
+        pbar.set_description(f'SSIM: {ssim_metrics/(index +1)}')
 
     # Calculate the average value of the sharpness evaluation index,
     # and all index range values are cut according to the following values
